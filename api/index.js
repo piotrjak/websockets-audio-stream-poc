@@ -1,16 +1,16 @@
 require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const record = require('node-record-lpcm16');
 const speech = require('@google-cloud/speech');
-const http = require('http');
 const express = require('express');
 const socketio = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
-console.log(process.env.GOOGLE_APPLICATION_CREDENTIAL);
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../www/index.html'));
 });

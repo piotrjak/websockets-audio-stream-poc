@@ -147,12 +147,12 @@
 
         function microphoneProcess(e) {
           var left = e.inputBuffer.getChannelData(0);
-          // var left16 = convertFloat32ToInt16(left); // old 32 to 16 function
           var left16 = downsampleBuffer(left, 44100, 16000);
           socket.emit('binaryData', left16);
         }
 
         // Interface
+
         var player = document.getElementById('player');
 
         var startButton = document.getElementById('startRecButton');
@@ -193,21 +193,6 @@
           });
         }
 
-        $('form').submit(function(e) {
-          e.preventDefault(); // prevents page reloading
-          socket.emit('chat message', $('#m').val());
-          $('#m').val('');
-          return false;
-        });
-
-        socket.on('chat message', function(msg) {
-          $('#messages').append($('<li>').text(msg));
-        });
-
-        socket.on('speechData', function(data) {
-          $('#messages').append($('<li>').text(data));
-        });
-
         var downsampleBuffer = function(buffer, sampleRate, outSampleRate) {
           if (outSampleRate == sampleRate) {
             return buffer;
@@ -235,6 +220,23 @@
           }
           return result.buffer;
         };
+
+        // Socket.io
+
+        $('form').submit(function(e) {
+          e.preventDefault(); // prevents page reloading
+          socket.emit('chat message', $('#m').val());
+          $('#m').val('');
+          return false;
+        });
+
+        socket.on('chat message', function(msg) {
+          $('#messages').append($('<li>').text(msg));
+        });
+
+        socket.on('speechData', function(data) {
+          $('#messages').append($('<li>').text(data));
+        });
       });
     </script>
   </body>
