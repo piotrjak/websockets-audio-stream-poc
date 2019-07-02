@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Socket.IO chat</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font: 13px Helvetica, Arial;
+      }
+      form {
+        background: #000;
+        padding: 3px;
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+      }
+      form input {
+        border: 0;
+        padding: 10px;
+        width: 90%;
+        margin-right: 0.5%;
+      }
+      form button {
+        width: 9%;
+        background: rgb(130, 224, 255);
+        border: none;
+        padding: 10px;
+      }
+      #messages {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+      }
+      #messages li {
+        padding: 5px 10px;
+      }
+      #messages li:nth-child(odd) {
+        background: #eee;
+      }
+      #startRecButton {
+        width: 30%;
+        font-size: 3rem;
+        padding: 1rem;
+        background-color: #4caf50;
+        color: white;
+      }
+      #stopRecButton {
+        width: 30%;
+        font-size: 3rem;
+        padding: 1rem;
+        background-color: red;
+        color: white;
+      }
+      #record {
+        display: flex;
+        justify-content: center;
+      }
+      audio {
+        display: block;
+        margin: 0 auto;
+      }
+      @keyframes redGlow {
+        from {
+          background-color: #8c190a;
+          -webkit-box-shadow: 0 0 9px #9c291a;
+        }
+        50% {
+          background-color: #9c291a;
+          -webkit-box-shadow: 0 0 18px #bdb5b4;
+        }
+        to {
+          background-color: #8c190a;
+          -webkit-box-shadow: 0 0 9px #9c291a;
+        }
+      }
+      #recordingStatus {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 20px;
+        margin: 1rem auto;
+        visibility: hidden;
+        -webkit-animation-name: redGlow;
+        -webkit-animation-duration: 2s;
+        -webkit-animation-iteration-count: infinite;
+      }
+    </style>
+  </head>
+  <body>
+    <audio id="player" controls></audio>
+    <br />
+    <div id="record">
+      <button id="startRecButton" type="button">Start recording</button>
+      <button id="stopRecButton" type="button">Stop recording</button>
+    </div>
+    <div id="recordingStatus"></div>
+    <br />
+    <ul id="messages"></ul>
+    <form action=""><input id="m" autocomplete="off" /><button>Send</button></form>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+    <script>
+      $(function() {
+        const socket = io.connect();
+        let bufferSize = 2048;
+        let AudioContext;
+        let context;
+        let processor;
+        let input;
+        let globalStream;
+
+        let streamStreaming = false;
+
+        function initRecording() {
+          socket.emit('startGoogleCloudStream', ''); //init socket Google Speech Connection
+          streamStreaming = true;
+          AudioContext = window.AudioContext || window.webkitAudioContext;
+          context = new AudioContext({
+            // if Non-interactive, use 'playback' or 'balanced' // https://developer.mozilla.org/en-US/docs/Web/API/AudioContextLatencyCategory
+            latencyHint: 'interactive',
+          });
+          processor = context.createScriptProcessor(bufferSize, 1, 1);
+          processor.connect(context.destination);
+          context.resume();
+
+          var handleSuccess = function(stream) {
+            if (window.URL) {
+              player.srcObject = stream;
+            } else {
+              player.src = stream;
+            }
+
+            globalStream = stream;
+            input = context.createMediaStreamSource(stream);
+            input.connect(processor);
+
+            processor.onaudioprocess = function(e) {
+              microphoneProcess(e);
+            };
+          };
+
+          navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(handleSuccess);
+        }
+
+        function microphoneProcess(e) {
+          var left = e.inputBuffer.getChannelData(0);
+          // var left16 = convertFloat32ToInt16(left); // old 32 to 16 function
+          var left16 = downsampleBuffer(left, 44100, 16000);
+          socket.emit('binaryData', left16);
+        }
+
+        // Interface
+        var player = document.getElementById('player');
+
+        var startButton = document.getElementById('startRecButton');
+        startButton.addEventListener('click', startRecording);
+
+        var endButton = document.getElementById('stopRecButton');
+        endButton.addEventListener('click', stopRecording);
+        endButton.disabled = true;
+
+        var recordingStatus = document.getElementById('recordingStatus');
+
+        function startRecording() {
+          startButton.disabled = true;
+          endButton.disabled = false;
+          recordingStatus.style.visibility = 'visible';
+          initRecording();
+        }
+
+        function stopRecording() {
+          // waited for FinalWord
+          startButton.disabled = false;
+          endButton.disabled = true;
+          recordingStatus.style.visibility = 'hidden';
+          streamStreaming = false;
+          socket.emit('endGoogleCloudStream', '');
+
+          let track = globalStream.getTracks()[0];
+          track.stop();
+
+          input.disconnect(processor);
+          processor.disconnect(context.destination);
+          context.close().then(function() {
+            input = null;
+            processor = null;
+            context = null;
+            AudioContext = null;
+            startButton.disabled = false;
+          });
+        }
+
+        $('form').submit(function(e) {
+          e.preventDefault(); // prevents page reloading
+          socket.emit('chat message', $('#m').val());
+          $('#m').val('');
+          return false;
+        });
+
+        socket.on('chat message', function(msg) {
+          $('#messages').append($('<li>').text(msg));
+        });
+
+        socket.on('speechData', function(data) {
+          $('#messages').append($('<li>').text(data));
+        });
+
+        var downsampleBuffer = function(buffer, sampleRate, outSampleRate) {
+          if (outSampleRate == sampleRate) {
+            return buffer;
+          }
+          if (outSampleRate > sampleRate) {
+            throw 'downsampling rate show be smaller than original sample rate';
+          }
+          var sampleRateRatio = sampleRate / outSampleRate;
+          var newLength = Math.round(buffer.length / sampleRateRatio);
+          var result = new Int16Array(newLength);
+          var offsetResult = 0;
+          var offsetBuffer = 0;
+          while (offsetResult < result.length) {
+            var nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+            var accum = 0,
+              count = 0;
+            for (var i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+              accum += buffer[i];
+              count++;
+            }
+
+            result[offsetResult] = Math.min(1, accum / count) * 0x7fff;
+            offsetResult++;
+            offsetBuffer = nextOffsetBuffer;
+          }
+          return result.buffer;
+        };
+      });
+    </script>
+  </body>
+</html>

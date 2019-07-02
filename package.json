@@ -1,0 +1,28 @@
+{
+  "name": "websockets-audio-stream-poc",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node api/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/piotrjak/websockets-audio-stream-poc.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/piotrjak/websockets-audio-stream-poc/issues"
+  },
+  "homepage": "https://github.com/piotrjak/websockets-audio-stream-poc#readme",
+  "dependencies": {
+    "@google-cloud/speech": "^3.2.2",
+    "dotenv": "^8.0.0",
+    "express": "^4.15.2",
+    "node-record-lpcm16": "^0.3.1",
+    "socket.io": "^2.2.0"
+  }
+}
